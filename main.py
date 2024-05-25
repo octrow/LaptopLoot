@@ -1,3 +1,4 @@
+import argparse
 import os
 import asyncio
 import traceback
@@ -18,44 +19,41 @@ load_dotenv()
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 SHEET_NAME = os.getenv("SHEET_NAME") or "eBay Laptops"
 
-
-
-
-
-# --- Data Extraction Functions ---
-
-# --- Web Scraping Functions ---
-
-
-# --- Google Sheets Functions ---
-
-
 # --- Main Function ---
-async def main():
+async def main(args):
     search_query = os.getenv("SEARCH_QUERY") or input("Enter your eBay search query: ")
     try:
         logger.info(f"Search query: {search_query}")
         async with async_playwright() as p:
-            logger.info("Launching browser...")
-            browser = await p.chromium.launch(headless=False)
-            logger.info("Launching new page...")
-            page = await browser.new_page()
-            logger.info("Navigating to eBay...")
-            laptops_data = await scrape_ebay_listings(page, search_query)
-            logger.info("Done scraping. Saving to Google Sheets...")
+            browser = await setup_browser(p)
+            page = await setup_page(browser)
+            laptops_data = await scrape_ebay_listings(page, search_query, args)
             df = pd.DataFrame(laptops_data)
-            print(df)
-
+            logger.info("Dataframe:\n", df)
             await save_to_google_sheet(SPREADSHEET_ID, SHEET_NAME, laptops_data)
-
             await browser.close()
     except Exception as e:
         logger.error(f"Error: {e}")
         logger.error(traceback.format_exc())
     finally:
-        await browser.close()
+        if 'browser' in locals():
+            await browser.close()
 
+async def setup_browser(p, without_browser=False):
+    logger.info("Launching browser...")
+    return await p.chromium.launch(headless=without_browser)
+
+async def setup_page(browser):
+    logger.info("Launching new page...")
+    return await browser.new_page()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    parser = argparse.ArgumentParser(description='Web scraping parameters.')
+    parser.add_argument('--pages', type=int, default=None, help='Number of pages to parse (default: all)')
+    parser.add_argument('--type', choices=['pc', 'mac'], default='pc', help='Type of computer (default: pc)')
+    parser.add_argument('--ram', nargs='+', type=int, choices=[16, 20, 24, 32, 64, 256],
+                        default=[16, 20, 24, 32, 64, 256], help='RAM filter options (default: all)')
+    parser.add_argument('--cpu', action='store_true', default=False, help='Turn on CPU filter (default: off)')
+    args = parser.parse_args()
+    asyncio.run(main(args))
 

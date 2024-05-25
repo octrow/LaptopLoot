@@ -3,3 +3,4 @@
 .env
 /laptoploot.json
 modules/__pycache__/
+/laptoploot_extraction.log

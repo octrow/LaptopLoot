@@ -21,8 +21,8 @@ async def extract_data_nlp(listing, element_name):
     """
     logger.error(f'Extracting data nlp for {element_name}...')
     html_content = await listing.content()
-    soup = nlp.parse_html(html_content)
-    text = nlp.extract_text(soup)
+    soup = nlp.clean_html(html_content)
+    text = nlp.extract_relevant_text(soup, element_name)
     tokens = nlp.process_text(text)
     element = nlp.find_element(element_name, tokens)
     if element:
