@@ -124,42 +124,42 @@ The `if __name__ == "__main__":` block ensures that the `main()` function is cal
 
 Here's the workflow of the eBay scraper code:
 
-**1. Initialization and Configuration:**
+1. **Initialization (`main.py`)**:
+   - Load environment variables from the `.env` file using `load_dotenv()`.
+   - Get Google Sheets configuration (spreadsheet ID, sheet name).
+   - Parse command-line arguments using `argparse`.
 
-   - **Load Environment Variables:**  Uses `load_dotenv()` to load variables from a `.env` file (containing sensitive information like credentials).
-   - **Get Search Query:**  Gets the search query from either an environment variable (`SEARCH_QUERY`) or user input.
+2. **Web Scraping (`modules/web_scraping.py`):**
+   - **`search_ebay(page, query, args)`:**
+     - Navigates to the eBay homepage and waits for the page to load.
+     - Enters the `query` in the search box.
+     - Applies filters based on the provided `args` (page number, laptop type, RAM, CPU).
+     - Waits for the search results page to load.
+   - **`scrape_ebay_listings(page, search_query, args)`:**
+     - Calls `search_ebay()` to initiate the search.
+     - Loops through the specified number of pages (`args.pages`) or until there are no more pages.
+     - Calls `scrape_page()` for each page to extract data from individual listings. 
+     - Navigates to the next page using `navigate_to_next_page()`.
+     - Returns a list of dictionaries (`all_laptops_data`), where each dictionary represents a laptop listing. 
 
-**2. Web Scraping:**
+3. **Data Extraction (`modules/data_extraction.py`):**
+   - **`extract_element(listing, css_selector, element_name)`:**
+     - Tries to extract the desired element using the provided `css_selector`.
+     - If the element is not found using the selector, it falls back to using NLP-based extraction with `extract_data_nlp()`.
+     - Handles special cases for specific elements (e.g., price, shipping cost).
+   - **`extract_data_nlp(listing, element_name)`:**
+     - Uses NLP (with spaCy and NLTK) to extract data from the HTML content of the listing.
+     - Cleans the HTML content, processes the text, and attempts to find the desired element based on the provided `element_name`.
 
-   - **Launch Browser:**  Uses `async_playwright()` to launch a Chromium browser instance.
-   - **Navigate to eBay:**
-      - Calls `search_ebay(page, query)`, which navigates to `https://www.ebay.com/`.
-      - Waits for the page to load completely (`page.wait_for_load_state('networkidle')`).
-      - Enters the search query into the search bar and submits it.
-   - **Scrape Search Results:**
-      - Calls `scrape_ebay_listings(page, search_query)`.
-      - **Loop through Pages:**
-        - Enters an infinite `while True:` loop to iterate through paginated search results.
-        - **Scrape Single Page:** Calls `scrape_page(page)` to extract data from the current page.
-           - **Iterate through Listings:** Loops through each listing on the page using `page.locator('li.s-item').all()`.
-           - **Extract Data:**
-              - Uses data extraction functions (`extract_laptop_name()`, `extract_price()`, etc.) to get laptop details.
-              - These functions use `await` correctly with Playwright's asynchronous methods (`listing.locator().text_content()`, etc.). 
-        - **Pagination:**
-           - Attempts to find and click the "Next" page link.
-           - Implements a random delay to avoid rate limiting.
-           - Exits the loop if there are no more pages or if a timeout occurs.
-   - **Close Browser:**  Closes the Playwright browser instance.
+4. **Data Processing and Storage (`main.py`):**
+   - The scraped data (list of dictionaries) is converted to a Pandas DataFrame for easier handling. 
+   - The DataFrame is printed to the console. 
+   - The data is saved to a Google Sheet using `save_to_google_sheet()`
 
-**3. Data Processing and Storage:**
+**Error Handling:**
 
-   - **Create DataFrame:** Converts the scraped data (list of dictionaries) into a Pandas DataFrame (`pd.DataFrame(laptops_data)`).
-   - **Print DataFrame:** Prints the DataFrame to the console for inspection.
-   - **Save to Google Sheets:**
-      - Calls `save_to_google_sheet(SPREADSHEET_ID, SHEET_NAME, laptops_data)`.
-      - Authenticates with Google Sheets using the service account credentials.
-      - Finds (or creates) the target spreadsheet and worksheet.
-      - Appends the data to the sheet.
+- The code uses `try-except` blocks throughout to handle potential errors during web scraping, data extraction, and saving to Google Sheets.
+- `traceback.format_exc()` is used to log detailed error messages and stack traces.
 
 **Additional Tips:**
 
@@ -170,6 +170,14 @@ Consider using proxy servers or rotating IP addresses to mitigate this risk.
 - **Website Changes:**  Websites change frequently. 
 If eBay's structure changes, the scraper may break and require updates to the selectors used in `page.locator()`.
 
+### File Structure
+
+- `main.py`: Main script to run the scraper.
+- `modules/`: Directory for custom modules.
+    - `web_scraping.py`: Contains functions for web scraping logic.
+    - `data_extraction.py`: Contains functions for extracting specific data from listings.
+    - `natural_language_processor.py`: Contains a class for natural language processing tasks. 
+    - `google_sheets.py`: Contains functions to interact with Google Sheets.
 
 ## Disclaimer:
 
