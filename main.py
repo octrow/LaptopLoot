@@ -3,7 +3,9 @@ import asyncio
 import re
 import traceback
 
-import gspread
+from modules import robust_extract
+from modules.natural_language_processor import NaturalLanguageProcessor
+# from modules.robust_extract import extract_price
 from dotenv import load_dotenv
 from random import randint
 from loguru import logger
@@ -26,94 +28,149 @@ if SERVICE_ACCOUNT_FILE is None:
 
 
 # --- Data Extraction Functions ---
-async def extract_laptop_name(listing):
-    logger.info("Extracting laptop name...")
-    try:
-        name_element = listing.locator('.s-item__title')
-        # logger.info(f"Extracted laptop name: name_element {name_element}")
-        name = await name_element.text_content()
-        logger.info(f"Extracted laptop name: {name}")
-        return name.strip()
-    except Exception as e:
-        logger.error(f"Error extracting laptop name: {e}")
+nlp = NaturalLanguageProcessor()
+
+async def extract_data_nlp(listing, element_name):
+    html_content = await listing.content()
+    soup = nlp.parse_html(html_content)
+    text = nlp.extract_text(soup)
+    tokens = nlp.process_text(text)
+    element = nlp.find_element(element_name, tokens)
+    if element:
+        element_code = nlp.get_element_code(soup, element)
+        return element_code
+    else:
         return "N/A"
 
-
-async def extract_price(listing):
-    logger.info("Extracting price...")
+async def extract_element(listing, css_selector, element_name):
+    logger.info(f"Extracting {element_name}...")
     try:
-        # Target the specific span element within .s-item__price
-        price_element = listing.locator('.s-item__price')
-        price_text = await price_element.text_content()
-        # Remove non-numeric characters before converting
-        price_text = re.sub(r"[^\d\.]", "", price_text)
-        logger.info(f"Extracted price: {price_text}")
-        return float(price_text)
-    except Exception as e:
-        logger.error(f"Error extracting price: {e}")
-        return "N/A"
-
-
-async def extract_shipping_cost(listing):
-    logger.info("Extracting shipping cost...")
-    try:
-        shipping_element = listing.locator('.s-item__shipping')
-        if await shipping_element.is_visible():
-            shipping_text = await shipping_element.text_content()
-            if 'Free' in shipping_text or 'Бесплатная' in shipping_text:
+        element = listing.locator(css_selector)
+        if not await element.is_visible():
+            return "N/A"
+        text = await element.text_content()
+        logger.info(f"Extracted {element_name}: {text}")
+        if element_name in ["url"]:
+            url = await element.get_attribute('href')
+            logger.info(f"Extracted {element_name}: {url}")
+            return url
+        if element_name in ["price"]:
+            # Remove non-numeric characters before converting
+            price_text = re.sub(r"[^\d\.]", "", text)
+            text = str(price_text)
+        if element_name in ["shipping cost"]:
+            if 'Free' in text or 'Бесплатная' in text:
                 logger.info(f"Extracted shipping cost: {0.00}")
                 return 0.00
             else:
-                # Extract only the numeric part of the shipping cost
-                shipping_cost = re.findall(r"[\d\.]+", shipping_text)
+                shipping_cost = re.findall(r"[\d\.]+", text)
                 logger.info(f"Extracted shipping cost: {shipping_cost}")
                 if shipping_cost:
-                    return float(shipping_cost[0])
+                    return str(shipping_cost[0])
                 else:
-                    return "N/A"  # Or handle cases without a numeric cost differently
-        else:
-            return "N/A"
+                    return "N/A"
+        if element_name in ["time left"]:
+            logger.info(f"Extracted time left: {text}")
+            return text.strip()
+        return text.strip()
     except Exception as e:
-        logger.error(f"Error extracting shipping cost: {e}")
-        return "N/A"
+        logger.error(f"Error extracting {element_name}: {e}")
+        logger.error(traceback.format_exc())
+        return await extract_data_nlp(listing, element_name)
+
+# async def extract_laptop_name(listing):
+#     logger.info("Extracting laptop name...")
+#     try:
+#         name_element = listing.locator('.s-item__title')
+#         # logger.info(f"Extracted laptop name: name_element {name_element}")
+#         name = await name_element.text_content()
+#         logger.info(f"Extracted laptop name: {name}")
+#         return name.strip()
+#     except Exception as e:
+#         logger.error(f"Error extracting laptop name: {e}")
+#         return await extract_data_nlp(listing, 'laptop name')
 
 
-async def extract_condition(listing):
-    logger.info("Extracting condition...")
-    try:
-        # Target the specific span element with the condition information
-        condition_element = listing.locator(".s-item__subtitle .SECONDARY_INFO")
-        condition_text = await condition_element.text_content()
-        logger.info(f"Extracted condition text: {condition_text}")
-        return condition_text.strip()
-    except Exception as e:
-        logger.error(f"Error extracting condition: {e}")
-        return "N/A"
+# async def extract_price(listing):
+#     logger.info("Extracting price...")
+#     try:
+#         # Target the specific span element within .s-item__price
+#         price_element = listing.locator('.s-item__price')
+#         price_text = await price_element.text_content()
+#         # Remove non-numeric characters before converting
+#         price_text = re.sub(r"[^\d\.]", "", price_text)
+#         logger.info(f"Extracted price: {price_text}")
+#         return float(price_text)
+#     except Exception as e:
+#         logger.error(f"Error extracting price: {e}")
+#         # Robust Extraction Fallback
+#         result1 = robust_extract.extract_price(listing.inner_html())
+#         result2 = await extract_data_nlp(listing, 'price')
+#         logger.info(f"Extracted price result1: {result1}, result2: {result2}")
+#         return result2
 
 
-async def extract_url(listing):
-    logger.info("Extracting url...")
-    try:
-        logger.info("Extracted url: " + await listing.locator('.s-item__link').get_attribute('href'))
-        return await listing.locator('.s-item__link').get_attribute('href')
-    except Exception as e:
-        logger.error(f"Error extracting url: {e}")
-        return "N/A"
+
+# async def extract_shipping_cost(listing):
+#     logger.info("Extracting shipping cost...")
+#     try:
+#         shipping_element = listing.locator('.s-item__shipping')
+#         if await shipping_element.is_visible():
+#             shipping_text = await shipping_element.text_content()
+#             if 'Free' in shipping_text or 'Бесплатная' in shipping_text:
+#                 logger.info(f"Extracted shipping cost: {0.00}")
+#                 return 0.00
+#             else:
+#                 # Extract only the numeric part of the shipping cost
+#                 shipping_cost = re.findall(r"[\d\.]+", shipping_text)
+#                 logger.info(f"Extracted shipping cost: {shipping_cost}")
+#                 if shipping_cost:
+#                     return float(shipping_cost[0])
+#                 else:
+#                     return "N/A"  # Or handle cases without a numeric cost differently
+#         else:
+#             return "N/A"
+#     except Exception as e:
+#         logger.error(f"Error extracting shipping cost: {e}")
+#         return await extract_data_nlp(listing, 'shipping cost')
 
 
-async def extract_time_left(listing):
-    logger.info("Extracting time left...")
-    try:
-        time_left_element = listing.locator('.s-item__time-left')
-        if await time_left_element.is_visible():
-            time_left_text = await time_left_element.text_content()
-            logger.info(f"Extracted time left: {time_left_text}")
-            return time_left_text.strip()
-        else:
-            return "N/A"
-    except Exception as e:
-        logger.error(f"Error extracting time left: {e}")
-        return "N/A"
+# async def extract_condition(listing):
+#     logger.info("Extracting condition...")
+#     try:
+#         # Target the specific span element with the condition information
+#         condition_element = listing.locator(".s-item__subtitle .SECONDARY_INFO")
+#         condition_text = await condition_element.text_content()
+#         logger.info(f"Extracted condition text: {condition_text}")
+#         return condition_text.strip()
+#     except Exception as e:
+#         logger.error(f"Error extracting condition: {e}")
+#         return await extract_data_nlp(listing, 'condition')
+
+
+# async def extract_url(listing):
+#     logger.info("Extracting url...")
+#     try:
+#         logger.info("Extracted url: " + await listing.locator('.s-item__link').get_attribute('href'))
+#         return await listing.locator('.s-item__link').get_attribute('href')
+#     except Exception as e:
+#         logger.error(f"Error extracting url: {e}")
+#         return await extract_data_nlp(listing, 'url')
+
+
+# async def extract_time_left(listing):
+#     logger.info("Extracting time left...")
+#     try:
+#         time_left_element = listing.locator('.s-item__time-left')
+#         if await time_left_element.is_visible():
+#             time_left_text = await time_left_element.text_content()
+#             logger.info(f"Extracted time left: {time_left_text}")
+#             return time_left_text.strip()
+#         else:
+#             return "N/A"
+#     except Exception as e:
+#         logger.error(f"Error extracting time left: {e}")
+#         return "N/A"
 
 
 # ... (Add other data extraction functions for: Bids, Seller Name, Seller Rating) ...
@@ -136,12 +193,13 @@ async def scrape_page(page):
     for listing in listings:
         logger.info(f"Scraping listing: {listing}")
         laptop = {}
-        laptop['Name'] = await extract_laptop_name(listing)
-        laptop['Price'] = await extract_price(listing)
-        laptop['Shipping Cost'] = await extract_shipping_cost(listing)
-        laptop['Condition'] = await extract_condition(listing)
-        laptop['URL'] = await extract_url(listing)
-        laptop['Time Left'] = await extract_time_left(listing)
+        # laptop['Name'] = await extract_laptop_name(listing)
+        laptop['Name'] = await extract_element(listing, '.s-item__title', 'laptop name')
+        laptop['Price'] = await extract_element(listing, '.s-item__price', 'price')
+        laptop['Shipping Cost'] = await extract_element(listing, '.s-item__shipping', 'shipping cost')
+        laptop['Condition'] = await extract_element(listing, '.s-item__subtitle .SECONDARY_INFO', 'condition')
+        laptop['URL'] = await extract_element(listing, '.s-item__link', 'url')
+        laptop['Time Left'] = await extract_element(listing, '.s-item__time-left', 'time left')
         # ... (Call other data extraction functions) ...
         laptops_data.append(laptop)
     return laptops_data
@@ -201,12 +259,6 @@ async def save_to_google_sheet(spreadsheet_id, sheet_name, data):
         logger.info("Open the URL in your browser to see gspread_asyncio in action!")
         # Allow anyone with the URL to write to this spreadsheet.
         await agc.insert_permission(spreadsheet.id, None, perm_type="anyone", role="writer")
-        # spreadsheet = await agc.open_by_key(spreadsheet_id)
-        # logger.info(f"Spreadsheet ID: {spreadsheet.id}")
-        # # Allow anyone with the URL to write to this spreadsheet.
-        # await agc.insert_permission(spreadsheet.id, None, perm_type="anyone", role="writer")
-        # # Create a new spreadsheet but also grab a reference to the default one.
-        # ws = await ss.add_worksheet("My Test Worksheet", 10, 5)
         worksheet = await spreadsheet.get_worksheet(0)
         logger.info(f"Worksheet ID: {worksheet.id}")
 
@@ -216,15 +268,6 @@ async def save_to_google_sheet(spreadsheet_id, sheet_name, data):
         # Append the data to the sheet
         await worksheet.append_rows(values, value_input_option='RAW')
         logger.info(f"Data saved to Google Sheet: {sheet_name}")
-    except gspread.exceptions.APIError as e:
-        logger.error(f"APIError: {e}")
-        # logger.error(traceback.format_exc())
-    except gspread.exceptions.SpreadsheetNotFound as e:
-        logger.error(f"SpreadsheetNotFound: {e}")
-        # logger.error(traceback.format_exc())
-    except gspread.exceptions.WorksheetNotFound as e:
-        logger.error(f"WorksheetNotFound: {e}")
-        # logger.error(traceback.format_exc())
     except Exception as e:
         logger.error(f"Error saving data to Google Sheet: {e}")
         # logger.error(traceback.format_exc())
@@ -257,7 +300,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
-    # laptop_data ={"name": "test"}
-    # async def main2():
-    #     await save_to_google_sheet(SPREADSHEET_ID, SHEET_NAME, laptop_data)
-    # asyncio.run(main2())
+
