@@ -12,69 +12,86 @@ import pandas as pd
 from google.oauth2.service_account import Credentials
 import gspread_asyncio
 
+# --- Load Environment Variables ---
+load_dotenv()
+
 # --- Google Sheets Configuration ---
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 SHEET_NAME = os.getenv("SHEET_NAME") or "eBay Laptops"
 SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
 
+if SERVICE_ACCOUNT_FILE is None:
+    raise ValueError("SERVICE_ACCOUNT_FILE is not set! Check your .env file.")
+
 
 # --- Data Extraction Functions ---
 async def extract_laptop_name(listing):
     try:
-        return (await listing.locator('.s-item__title').text_content()).strip()
-    except:
+        # Await text_content() before stripping
+        name = await listing.locator('.s-item__title').text_content()
+        return name.strip()
+    except Exception as e:
+        logger.error(f"Error extracting laptop name: {e}")
         return "N/A"
 
 
 async def extract_price(listing):
     try:
-        price_text = await (listing.locator('.s-item__price span').text_content()).strip()
-        return float(price_text.replace('$', '').replace(',', ''))
-    except:
+        # Await text_content() before processing
+        price_text = await listing.locator('.s-item__price').text_content()
+        return float(price_text.strip().replace('$', '').replace(',', ''))
+    except Exception as e:
+        logger.error(f"Error extracting price: {e}")
         return "N/A"
 
 
 async def extract_shipping_cost(listing):
     try:
-        shipping_element = await listing.locator('.s-item__shipping')
-        if shipping_element.is_visible():
-            shipping_text = shipping_element.text_content().strip()
+        shipping_element = listing.locator('.s-item__shipping')
+        if await shipping_element.is_visible():
+            shipping_text = await shipping_element.text_content()
             if 'Free' in shipping_text:
                 return 0.00
             else:
                 return float(shipping_text.replace('shipping', '').replace('$', '').replace(',', ''))
         else:
             return "N/A"
-    except:
+    except Exception as e:
+        logger.error(f"Error extracting shipping cost: {e}")
         return "N/A"
 
 
 async def extract_condition(listing):
     try:
-        condition_element = await listing.locator('.s-item__subtitle')
-        if condition_element.is_visible():
-            return condition_element.text_content().strip()
+        condition_element = listing.locator('.s-item__subtitle')
+        if await condition_element.is_visible():
+            condition_text = await condition_element.text_content()
+            return condition_text.strip()
         else:
             return "N/A"
-    except:
+    except Exception as e:
+        logger.error(f"Error extracting condition: {e}")
         return "N/A"
 
 
 async def extract_url(listing):
     try:
         return await listing.locator('.s-item__link').get_attribute('href')
-    except:
+    except Exception as e:
+        logger.error(f"Error extracting url: {e}")
         return "N/A"
 
 
 async def extract_time_left(listing):
     try:
-        time_left_element = await listing.locator('.s-item__time-left')
-        if time_left_element.is_visible():
-            return time_left_element.text_content().strip()
+        time_left_element = listing.locator('.s-item__time-left')
+        if await time_left_element.is_visible():
+            time_left_text = await time_left_element.text_content()
+            return time_left_text.strip()
         else:
             return "N/A"
-    except:
+    except Exception as e:
+        logger.error(f"Error extracting time left: {e}")
         return "N/A"
 
 
@@ -91,9 +108,9 @@ async def search_ebay(page, query):
 
 
 async def scrape_page(page):
-    # Awaiting 'all()' before iterating
     laptops_data = []
-    for listing in await page.locator('li.s-item').all():
+    listings = await page.locator('li.s-item').all()  # Get all listings
+    for listing in listings:
         laptop = {}
         laptop['Name'] = await extract_laptop_name(listing)
         laptop['Price'] = await extract_price(listing)
@@ -112,7 +129,6 @@ async def scrape_ebay_listings(page, search_query):
     page_num = 1
     while True:
         print(f"Scraping page {page_num}...")
-        # Awaiting 'scrape_page' before extending
         all_laptops_data.extend(await scrape_page(page))
         try:
             next_page_link = page.locator('a.pagination__next')
@@ -122,7 +138,6 @@ async def scrape_ebay_listings(page, search_query):
                 await page.wait_for_load_state('networkidle', timeout=10000)
                 await asyncio.sleep(randint(2, 5))
                 print(f"Scraped page {page_num}.")
-                break # DEVNOTE: For testing purposes
             else:
                 print("No more pages found.")
                 break
@@ -140,13 +155,12 @@ async def save_to_google_sheet(spreadsheet_id, sheet_name, data):
             "https://www.googleapis.com/auth/spreadsheets",
         ],
     )
-    # logger.info(f'Creds: {creds}')
+    logger.info(f'Creds: {creds}')
 
     agcm = gspread_asyncio.AsyncioGspreadClientManager(lambda: creds)  # Create the manager
-    # logger.info(f'AGCM: {agcm}')
-    async with agcm.authorize() as client:  # Get authorized client
+    logger.info(f'AGCM: {agcm}')
+    async with agcm.authorize() as client:
         spreadsheet = await client.open_by_key(spreadsheet_id)
-        # logger.info(f'Spreadsheet: {spreadsheet}')
         try:
             worksheet = await spreadsheet.worksheet(sheet_name)
         except gspread.exceptions.WorksheetNotFound:
@@ -160,20 +174,23 @@ async def save_to_google_sheet(spreadsheet_id, sheet_name, data):
 
 # --- Main Function ---
 async def main():
-    load_dotenv()
     search_query = os.getenv("SEARCH_QUERY") or input("Enter your eBay search query: ")
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=False)
+            page = await browser.new_page()
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=False)
-        page = await browser.new_page()
+            laptops_data = await scrape_ebay_listings(page, search_query)
 
-        laptops_data = await scrape_ebay_listings(page, search_query)
+            df = pd.DataFrame(laptops_data)
+            print(df)
 
-        df = pd.DataFrame(laptops_data)
-        print(df)
+            await save_to_google_sheet(SPREADSHEET_ID, SHEET_NAME, laptops_data)
 
-        await save_to_google_sheet(SPREADSHEET_ID, SHEET_NAME, laptops_data)
-
+            await browser.close()
+    except Exception as e:
+        logger.error(f"Error: {e}")
+    finally:
         await browser.close()
 
 
