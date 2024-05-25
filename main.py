@@ -4,8 +4,7 @@ import asyncio
 import gspread
 from dotenv import load_dotenv
 from random import randint
-import time
-
+from loguru import logger
 from playwright.async_api import async_playwright
 from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
 
@@ -20,24 +19,24 @@ SERVICE_ACCOUNT_FILE = os.getenv("SERVICE_ACCOUNT_FILE")
 
 
 # --- Data Extraction Functions ---
-def extract_laptop_name(listing):
+async def extract_laptop_name(listing):
     try:
-        return listing.locator('.s-item__title').text_content().strip()
+        return (await listing.locator('.s-item__title').text_content()).strip()
     except:
         return "N/A"
 
 
-def extract_price(listing):
+async def extract_price(listing):
     try:
-        price_text = listing.locator('.s-item__price').text_content().strip()
+        price_text = await (listing.locator('.s-item__price span').text_content()).strip()
         return float(price_text.replace('$', '').replace(',', ''))
     except:
         return "N/A"
 
 
-def extract_shipping_cost(listing):
+async def extract_shipping_cost(listing):
     try:
-        shipping_element = listing.locator('.s-item__shipping')
+        shipping_element = await listing.locator('.s-item__shipping')
         if shipping_element.is_visible():
             shipping_text = shipping_element.text_content().strip()
             if 'Free' in shipping_text:
@@ -50,9 +49,9 @@ def extract_shipping_cost(listing):
         return "N/A"
 
 
-def extract_condition(listing):
+async def extract_condition(listing):
     try:
-        condition_element = listing.locator('.s-item__subtitle')
+        condition_element = await listing.locator('.s-item__subtitle')
         if condition_element.is_visible():
             return condition_element.text_content().strip()
         else:
@@ -61,16 +60,16 @@ def extract_condition(listing):
         return "N/A"
 
 
-def extract_url(listing):
+async def extract_url(listing):
     try:
-        return listing.locator('.s-item__link').get_attribute('href')
+        return await listing.locator('.s-item__link').get_attribute('href')
     except:
         return "N/A"
 
 
-def extract_time_left(listing):
+async def extract_time_left(listing):
     try:
-        time_left_element = listing.locator('.s-item__time-left')
+        time_left_element = await listing.locator('.s-item__time-left')
         if time_left_element.is_visible():
             return time_left_element.text_content().strip()
         else:
@@ -82,42 +81,48 @@ def extract_time_left(listing):
 # ... (Add other data extraction functions for: Bids, Seller Name, Seller Rating) ...
 
 # --- Web Scraping Functions ---
-def search_ebay(page, query):
+async def search_ebay(page, query):
+    await page.goto("https://www.ebay.com/")  # Go to the main page first
+    await page.wait_for_load_state('networkidle')  # Wait for main page to be fully interactive
     search_box = page.locator('#gh-ac')
-    search_box.fill(query)
-    search_box.press('Enter')
-    page.wait_for_load_state('networkidle')
+    await search_box.fill(query, timeout=60000)
+    await search_box.press('Enter')
+    await page.wait_for_load_state('networkidle')
 
 
-def scrape_page(page):
+async def scrape_page(page):
+    # Awaiting 'all()' before iterating
     laptops_data = []
-    for listing in page.locator('li.s-item').all():
+    for listing in await page.locator('li.s-item').all():
         laptop = {}
-        laptop['Name'] = extract_laptop_name(listing)
-        laptop['Price'] = extract_price(listing)
-        laptop['Shipping Cost'] = extract_shipping_cost(listing)
-        laptop['Condition'] = extract_condition(listing)
-        laptop['URL'] = extract_url(listing)
-        laptop['Time Left'] = extract_time_left(listing)
+        laptop['Name'] = await extract_laptop_name(listing)
+        laptop['Price'] = await extract_price(listing)
+        laptop['Shipping Cost'] = await extract_shipping_cost(listing)
+        laptop['Condition'] = await extract_condition(listing)
+        laptop['URL'] = await extract_url(listing)
+        laptop['Time Left'] = await extract_time_left(listing)
         # ... (Call other data extraction functions) ...
         laptops_data.append(laptop)
     return laptops_data
 
 
 async def scrape_ebay_listings(page, search_query):
-    search_ebay(page, search_query)
+    await search_ebay(page, search_query)
     all_laptops_data = []
     page_num = 1
     while True:
         print(f"Scraping page {page_num}...")
-        all_laptops_data.extend(scrape_page(page))
+        # Awaiting 'scrape_page' before extending
+        all_laptops_data.extend(await scrape_page(page))
         try:
             next_page_link = page.locator('a.pagination__next')
-            if next_page_link.is_visible():
-                next_page_link.click()
+            if await next_page_link.is_visible():
+                await next_page_link.click()
                 page_num += 1
-                page.wait_for_load_state('networkidle', timeout=10000)
-                time.sleep(randint(2, 5))
+                await page.wait_for_load_state('networkidle', timeout=10000)
+                await asyncio.sleep(randint(2, 5))
+                print(f"Scraped page {page_num}.")
+                break # DEVNOTE: For testing purposes
             else:
                 print("No more pages found.")
                 break
@@ -135,10 +140,13 @@ async def save_to_google_sheet(spreadsheet_id, sheet_name, data):
             "https://www.googleapis.com/auth/spreadsheets",
         ],
     )
+    # logger.info(f'Creds: {creds}')
 
     agcm = gspread_asyncio.AsyncioGspreadClientManager(lambda: creds)  # Create the manager
+    # logger.info(f'AGCM: {agcm}')
     async with agcm.authorize() as client:  # Get authorized client
         spreadsheet = await client.open_by_key(spreadsheet_id)
+        # logger.info(f'Spreadsheet: {spreadsheet}')
         try:
             worksheet = await spreadsheet.worksheet(sheet_name)
         except gspread.exceptions.WorksheetNotFound:
@@ -155,11 +163,11 @@ async def main():
     load_dotenv()
     search_query = os.getenv("SEARCH_QUERY") or input("Enter your eBay search query: ")
 
-    async with async_playwright() as p: # Use async_playwright
-        browser = await p.chromium.launch(headless=True) # TODO: Class 'Browser' does not define '__await__', so the 'await' operator cannot be used on its instances
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=False)
         page = await browser.new_page()
 
-        laptops_data = await scrape_ebay_listings(page, search_query)  # No await needed here
+        laptops_data = await scrape_ebay_listings(page, search_query)
 
         df = pd.DataFrame(laptops_data)
         print(df)
