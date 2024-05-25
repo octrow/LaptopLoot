@@ -45,135 +45,43 @@ async def extract_data_nlp(listing, element_name):
 async def extract_element(listing, css_selector, element_name):
     logger.info(f"Extracting {element_name}...")
     try:
-        element = listing.locator(css_selector)
-        if not await element.is_visible():
+        elements = await listing.locator(css_selector).all()
+        if not elements:
             return "N/A"
-        text = await element.text_content()
-        logger.info(f"Extracted {element_name}: {text}")
+        texts = []
+        for element in elements:
+            if await element.is_visible():
+                text = await element.text_content()
+                texts.append(text)
+        logger.info(f"Extracted {element_name}: {texts}")
         if element_name in ["url"]:
-            url = await element.get_attribute('href')
+            url = await elements[0].get_attribute('href')
             logger.info(f"Extracted {element_name}: {url}")
             return url
         if element_name in ["price"]:
             # Remove non-numeric characters before converting
-            price_text = re.sub(r"[^\d\.]", "", text)
-            text = str(price_text)
+            price_texts = [re.sub(r"[^\d\.]", "", text) for text in texts]
+            texts = price_texts
         if element_name in ["shipping cost"]:
-            if 'Free' in text or 'Бесплатная' in text:
+            if any('Free' in text or 'Бесплатная' in text for text in texts):
                 logger.info(f"Extracted shipping cost: {0.00}")
                 return 0.00
             else:
-                shipping_cost = re.findall(r"[\d\.]+", text)
-                logger.info(f"Extracted shipping cost: {shipping_cost}")
-                if shipping_cost:
-                    return str(shipping_cost[0])
+                shipping_costs = [re.findall(r"[\d\.]+", text) for text in texts]
+                logger.info(f"Extracted shipping cost: {shipping_costs}")
+                if shipping_costs:
+                    return [str(cost[0]) for cost in shipping_costs if cost]
                 else:
                     return "N/A"
         if element_name in ["time left"]:
-            logger.info(f"Extracted time left: {text}")
-            return text.strip()
-        return text.strip()
+            logger.info(f"Extracted time left: {texts}")
+            return [text.strip() for text in texts]
+        return [text.strip() for text in texts]
     except Exception as e:
         logger.error(f"Error extracting {element_name}: {e}")
         logger.error(traceback.format_exc())
         return await extract_data_nlp(listing, element_name)
 
-# async def extract_laptop_name(listing):
-#     logger.info("Extracting laptop name...")
-#     try:
-#         name_element = listing.locator('.s-item__title')
-#         # logger.info(f"Extracted laptop name: name_element {name_element}")
-#         name = await name_element.text_content()
-#         logger.info(f"Extracted laptop name: {name}")
-#         return name.strip()
-#     except Exception as e:
-#         logger.error(f"Error extracting laptop name: {e}")
-#         return await extract_data_nlp(listing, 'laptop name')
-
-
-# async def extract_price(listing):
-#     logger.info("Extracting price...")
-#     try:
-#         # Target the specific span element within .s-item__price
-#         price_element = listing.locator('.s-item__price')
-#         price_text = await price_element.text_content()
-#         # Remove non-numeric characters before converting
-#         price_text = re.sub(r"[^\d\.]", "", price_text)
-#         logger.info(f"Extracted price: {price_text}")
-#         return float(price_text)
-#     except Exception as e:
-#         logger.error(f"Error extracting price: {e}")
-#         # Robust Extraction Fallback
-#         result1 = robust_extract.extract_price(listing.inner_html())
-#         result2 = await extract_data_nlp(listing, 'price')
-#         logger.info(f"Extracted price result1: {result1}, result2: {result2}")
-#         return result2
-
-
-
-# async def extract_shipping_cost(listing):
-#     logger.info("Extracting shipping cost...")
-#     try:
-#         shipping_element = listing.locator('.s-item__shipping')
-#         if await shipping_element.is_visible():
-#             shipping_text = await shipping_element.text_content()
-#             if 'Free' in shipping_text or 'Бесплатная' in shipping_text:
-#                 logger.info(f"Extracted shipping cost: {0.00}")
-#                 return 0.00
-#             else:
-#                 # Extract only the numeric part of the shipping cost
-#                 shipping_cost = re.findall(r"[\d\.]+", shipping_text)
-#                 logger.info(f"Extracted shipping cost: {shipping_cost}")
-#                 if shipping_cost:
-#                     return float(shipping_cost[0])
-#                 else:
-#                     return "N/A"  # Or handle cases without a numeric cost differently
-#         else:
-#             return "N/A"
-#     except Exception as e:
-#         logger.error(f"Error extracting shipping cost: {e}")
-#         return await extract_data_nlp(listing, 'shipping cost')
-
-
-# async def extract_condition(listing):
-#     logger.info("Extracting condition...")
-#     try:
-#         # Target the specific span element with the condition information
-#         condition_element = listing.locator(".s-item__subtitle .SECONDARY_INFO")
-#         condition_text = await condition_element.text_content()
-#         logger.info(f"Extracted condition text: {condition_text}")
-#         return condition_text.strip()
-#     except Exception as e:
-#         logger.error(f"Error extracting condition: {e}")
-#         return await extract_data_nlp(listing, 'condition')
-
-
-# async def extract_url(listing):
-#     logger.info("Extracting url...")
-#     try:
-#         logger.info("Extracted url: " + await listing.locator('.s-item__link').get_attribute('href'))
-#         return await listing.locator('.s-item__link').get_attribute('href')
-#     except Exception as e:
-#         logger.error(f"Error extracting url: {e}")
-#         return await extract_data_nlp(listing, 'url')
-
-
-# async def extract_time_left(listing):
-#     logger.info("Extracting time left...")
-#     try:
-#         time_left_element = listing.locator('.s-item__time-left')
-#         if await time_left_element.is_visible():
-#             time_left_text = await time_left_element.text_content()
-#             logger.info(f"Extracted time left: {time_left_text}")
-#             return time_left_text.strip()
-#         else:
-#             return "N/A"
-#     except Exception as e:
-#         logger.error(f"Error extracting time left: {e}")
-#         return "N/A"
-
-
-# ... (Add other data extraction functions for: Bids, Seller Name, Seller Rating) ...
 
 # --- Web Scraping Functions ---
 async def search_ebay(page, query):
@@ -263,10 +171,20 @@ async def save_to_google_sheet(spreadsheet_id, sheet_name, data):
         logger.info(f"Worksheet ID: {worksheet.id}")
 
         values = [[item[key] for key in item] for item in data]
-        logger.info(f"Data: {values}")
-
+        # logger.info(f"Data: {values}")
         # Append the data to the sheet
-        await worksheet.append_rows(values, value_input_option='RAW')
+        flat_values = []
+        for value in values:
+            flat_row = []
+            for item in value:
+                if isinstance(item, list):
+                    flat_row.append(', '.join(map(str, item)))
+                else:
+                    flat_row.append(item)
+            flat_values.append(flat_row)
+        # logger.info(f"Flat values: {flat_values}")
+        # Append the data to the sheet
+        await worksheet.append_rows(flat_values, value_input_option='RAW')
         logger.info(f"Data saved to Google Sheet: {sheet_name}")
     except Exception as e:
         logger.error(f"Error saving data to Google Sheet: {e}")
@@ -294,6 +212,7 @@ async def main():
             await browser.close()
     except Exception as e:
         logger.error(f"Error: {e}")
+        logger.error(traceback.format_exc())
     finally:
         await browser.close()
 
