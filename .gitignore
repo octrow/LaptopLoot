@@ -2,3 +2,4 @@
 /venv
 .env
 /laptoploot.json
+modules/__pycache__/
