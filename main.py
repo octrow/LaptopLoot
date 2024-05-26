@@ -1,9 +1,10 @@
 import argparse
+import json
 import os
 import asyncio
 import traceback
 
-from modules.google_sheets import SERVICE_ACCOUNT_FILE, save_to_google_sheet
+from modules.google_sheets import save_to_google_sheet, load_settings
 from dotenv import load_dotenv
 from loguru import logger
 from playwright.async_api import async_playwright
@@ -15,12 +16,14 @@ from modules.web_scraping import scrape_ebay_listings
 # --- Load Environment Variables ---
 load_dotenv()
 
-# --- Google Sheets Configuration ---
-SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
-SHEET_NAME = os.getenv("SHEET_NAME") or "eBay Laptops"
+# --- Load settings from file ---
+settings = load_settings()
 
 # --- Main Function ---
 async def main(args):
+    # --- Google Sheets Configuration ---
+    SPREADSHEET_ID = settings.get('SPREADSHEET_ID', os.getenv("SPREADSHEET_ID")) or None
+    SHEET_NAME = settings.get('SHEET_NAME', os.getenv("SHEET_NAME")) or "eBay Laptops"
     search_query = os.getenv("SEARCH_QUERY") or input("Enter your eBay search query: ")
     try:
         logger.info(f"Search query: {search_query}")
@@ -30,7 +33,12 @@ async def main(args):
             laptops_data = await scrape_ebay_listings(page, search_query, args)
             df = pd.DataFrame(laptops_data)
             logger.info("Dataframe:\n", df)
-            await save_to_google_sheet(SPREADSHEET_ID, SHEET_NAME, laptops_data)
+
+            # --- Google Sheets Integration (with new table handling) ---
+            if args.new_table:
+                await save_to_google_sheet(None, SHEET_NAME, laptops_data)
+            else:
+                await save_to_google_sheet(SPREADSHEET_ID, SHEET_NAME, laptops_data)
             await browser.close()
     except Exception as e:
         logger.error(f"Error: {e}")
@@ -54,6 +62,8 @@ if __name__ == "__main__":
     parser.add_argument('--ram', nargs='+', type=int, choices=[16, 20, 24, 32, 64, 256],
                         default=[16, 20, 24, 32, 64, 256], help='RAM filter options (default: all)')
     parser.add_argument('--cpu', action='store_true', default=False, help='Turn on CPU filter (default: off)')
+    parser.add_argument('--new-table', action='store_true', default=False,
+                        help='Create a new Google Sheet and store its ID for future runs')
     args = parser.parse_args()
     asyncio.run(main(args))
 

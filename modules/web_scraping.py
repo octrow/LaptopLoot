@@ -31,7 +31,7 @@ async def search_ebay(page, query, args):
 
         # Apply RAM filter
         for ram in args.ram:
-            ram_filter = page.locator(f'div#refineOverlay-subPanel-RAM%20Size li:has-text("{ram} GB") input')
+            ram_filter = page.locator(f'div#refineOverlay-subPanel-RAM li:has-text("{ram} GB") input')
             if await ram_filter.is_visible():
                 await ram_filter.check()
 
@@ -47,8 +47,9 @@ async def search_ebay(page, query, args):
 
         # Apply the filter dialog
         apply_button = page.locator('x-overlay-footer__apply-btn btn btn--primary')
-        await apply_button.click()
-        await page.wait_for_load_state('networkidle')
+        if await apply_button.is_visible():
+            await apply_button.click()
+            await page.wait_for_load_state('networkidle')
 
     logger.info(f"Searching for {query}...")
 
