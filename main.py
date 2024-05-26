@@ -19,6 +19,8 @@ load_dotenv()
 # --- Load settings from file ---
 settings = load_settings()
 
+
+
 # --- Main Function ---
 async def main(args):
     # --- Google Sheets Configuration ---
@@ -29,6 +31,7 @@ async def main(args):
         logger.info(f"Search query: {search_query}")
         async with async_playwright() as p:
             browser = await setup_browser(p)
+            context = await browser.new_context(locale=args.lang, timezone_id=args.timezone, geolocation=args.location, permissions=["geolocation"])
             page = await setup_page(browser)
             laptops_data = await scrape_ebay_listings(page, search_query, args)
             df = pd.DataFrame(laptops_data)
@@ -64,6 +67,10 @@ if __name__ == "__main__":
     parser.add_argument('--cpu', action='store_true', default=False, help='Turn on CPU filter (default: off)')
     parser.add_argument('--new-table', action='store_true', default=False,
                         help='Create a new Google Sheet and store its ID for future runs')
+    parser.add_argument('--lang', choices=['en-EN', 'ru-RU', 'de-DE'], default='en-EN', help='Language of the search results (default: en-EN)')
+    parser.add_argument('--zip_code', type=str, default='19706', help='Zip code for location (default: USA)')
+    parser.add_argument('--timezone', type=str, default='US/Eastern', help='Timezone for location (default: US/Eastern)')
+    parser.add_argument('--location', default={"longitude": 39.665810, "latitude": -75.598831}, help='Location for location (default: USA)')
     args = parser.parse_args()
     asyncio.run(main(args))
 
