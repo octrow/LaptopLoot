@@ -31,9 +31,16 @@ async def main(args):
         logger.info(f"Search query: {search_query}")
         async with async_playwright() as p:
             browser = await setup_browser(p)
-            context = await browser.new_context(locale=args.lang, timezone_id=args.timezone, geolocation=args.location, permissions=["geolocation"])
+            context = await browser.new_context(
+                locale=args.lang,
+                timezone_id=args.timezone,
+                geolocation=args.location,
+                permissions=["geolocation"])
             page = await setup_page(browser)
+
+            # await context.clear_cookies() # Clear cookies before
             laptops_data = await scrape_ebay_listings(page, search_query, args)
+            # await context.clear_cookies() # Clear cookies after
             df = pd.DataFrame(laptops_data)
             logger.info("Dataframe:\n", df)
 
@@ -61,16 +68,38 @@ async def setup_page(browser):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Web scraping parameters.')
     parser.add_argument('--pages', type=int, default=None, help='Number of pages to parse (default: all)')
-    parser.add_argument('--type', choices=['pc', 'mac'], default='pc', help='Type of computer (default: pc)')
-    parser.add_argument('--ram', nargs='+', type=int, choices=[16, 20, 24, 32, 64, 256],
-                        default=[16, 20, 24, 32, 64, 256], help='RAM filter options (default: all)')
-    parser.add_argument('--cpu', action='store_true', default=False, help='Turn on CPU filter (default: off)')
     parser.add_argument('--new-table', action='store_true', default=False,
                         help='Create a new Google Sheet and store its ID for future runs')
     parser.add_argument('--lang', choices=['en-EN', 'ru-RU', 'de-DE'], default='en-EN', help='Language of the search results (default: en-EN)')
-    parser.add_argument('--zip_code', type=str, default='19706', help='Zip code for location (default: USA)')
+    parser.add_argument('--country', type=str, default='United States', help='Country for location (default: United States)')
     parser.add_argument('--timezone', type=str, default='US/Eastern', help='Timezone for location (default: US/Eastern)')
     parser.add_argument('--location', default={"longitude": 39.665810, "latitude": -75.598831}, help='Location for location (default: USA)')
+    # Category (default: PC Laptops & Netbooks)
+    parser.add_argument('--category', type=str, default='PC Laptops & Netbooks',
+                        help='eBay category to search within (default: PC Laptops & Netbooks)')
+    # Filters
+    parser.add_argument('--ram', nargs='+', type=int, choices=[4, 8, 12, 16, 20, 24, 32, 64, 128],
+                        default=[4, 8, 12, 16, 20, 24, 32, 64, 128], help='RAM filter options (default: all)')
+    parser.add_argument('--screen_size', nargs='+', type=str,
+                        default=['13-13.9 in', '14-14.9 in', '15-15.9 in', '16-16.9 in'],
+                        help='Screen size filter options (default: all common sizes)')
+    parser.add_argument('--cpu', nargs='+', type=str,
+                        default=['Intel Core i9 13th Gen.', 'Intel Core i9 12th Gen.', 'Intel Core i9 11th Gen',
+                                 'Intel Core i9 10th Gen.', "Intel Core i7 13th Gen.", "Intel Core i7 12th Gen.",
+                                 "Intel Core i7 11th Gen.", "Intel Core i5 12th Gen.", "Intel Core i5 13th Gen.",
+                                 "Intel Core i5 11th Gen.", "Intel Core i3 13th Gen.", "Intel Core i3 12th Gen.",
+                                 "AMD Ryzen 9 7000 Series", "AMD Ryzen 9 5000 Series",'AMD Ryzen 5', 'AMD Ryzen 7',
+                                 'AMD Ryzen 9'],
+                        help='CPU filter options (default: common Intel and AMD processors)')
+    parser.add_argument('--condition', nargs='+', type=str,
+                        default=['New', 'Open box', "Certified - Refurbished", "Excellent - Refurbished",
+                                 "Very Good - Refurbished", "Good - Refurbished",'Used'],
+                        help='Condition filter options (default: common conditions)')
+    # Price Order (default: Price + Shipping: lowest first)
+    parser.add_argument('--price_order', type=str, default='Price + Shipping: lowest first',
+                        choices=['Price + Shipping: lowest first', 'Price + Shipping: highest first',
+                                 'Price: lowest first', 'Price: highest first', 'Ending soonest', 'Newly listed'],
+                        help='Sorting order for price (default: Price + Shipping: lowest first)')
     args = parser.parse_args()
     asyncio.run(main(args))
 
