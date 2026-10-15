@@ -16,8 +16,8 @@ It leverages asynchronous programming with `Playwright` for efficient web scrapi
 
 ## Requirements:
 
-- **Python 3.7+** 
-- **Libraries:** Install the necessary libraries using `pip install -r requirements.txt` 
+- **Python 3.12** and [uv](https://docs.astral.sh/uv/)
+- **Libraries:** `uv sync` installs them, including the spaCy `en_core_web_sm` model
 - **Google Cloud Platform Project:** 
     - Create a new GCP project.
     - Enable the Google Sheets API.
@@ -26,7 +26,7 @@ It leverages asynchronous programming with `Playwright` for efficient web scrapi
 ## Setup and Configuration:
 
 1. **Clone the Repository:** `git clone https://github.com/octrow/LaptopLoot.git`
-2. **Install Dependencies:** `pip install -r requirements.txt`
+2. **Install Dependencies:** `uv sync`, then `uv run playwright install chromium`
 3. **Environment Variables:**
     - Create a `.env` file in the project's root directory.
     - Add the following lines, replacing the placeholders with your actual values: 
@@ -43,7 +43,7 @@ It leverages asynchronous programming with `Playwright` for efficient web scrapi
 
 ## Usage:
 
-1. **Run the Scraper:** `python main.py`
+1. **Run the Scraper:** `uv run main.py`
 2. **View Data:** Open your Google Sheet to access the scraped laptop data.
 
 ### Data Extraction Functions

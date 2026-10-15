@@ -1,0 +1,29 @@
+[project]
+name = "laptoploot"
+version = "1.28.0"
+description = "Scrape eBay laptop listings and save them to a Google Sheet"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "beautifulsoup4>=4.12",
+    "en-core-web-sm",
+    "google-auth>=2.29",
+    "gspread>=6.0",
+    "gspread-asyncio>=2.0",
+    "loguru>=0.7",
+    "nltk>=3.8",
+    "pandas>=2.2",
+    "playwright>=1.44",
+    "python-dotenv>=1.0",
+    "spacy>=3.8,<3.9",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
