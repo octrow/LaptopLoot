@@ -27,3 +27,7 @@ package = false
 
 [tool.uv.sources]
 en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
+
+[project.urls]
+Homepage = "https://github.com/octrow/LaptopLoot"
+Issues = "https://github.com/octrow/LaptopLoot/issues"
