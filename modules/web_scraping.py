@@ -17,6 +17,7 @@ CSS_SELECTOR_URL = '.s-item__link'
 CSS_SELECTOR_TIME_LEFT = '.s-item__time-left'
 CSS_SELECTOR_NEXT_PAGE = 'a.pagination__next'
 CSS_SELECTOR_LISTING = 'li.s-item'
+CSS_SELECTOR_SEARCH_INPUT = '#gh-ac'
 CSS_SELECTOR_LANGUAGE_BUTTON = '#gh-eb-Geo'
 CSS_SELECTOR_LANGUAGE_DROPDOWN = '#gh-eb-Geo-o'
 CSS_SELECTOR_ENGLISH_LANGUAGE = '#gh-eb-Geo-a-en'
@@ -98,14 +99,14 @@ async def apply_filter(page, filter_name, filter_values, suffix=""):
         try:
             logger.info(f"Applying filter '{filter_name}' with values: {filter_values}")
             # Open the filter tab
-            page.get_by_role("tab", name=filter_name, exact=True).click()
+            await page.get_by_role("tab", name=filter_name, exact=True).click()
             await expect(page.get_by_role("tab", name=filter_name, exact=True)).to_be_visible()
 
             # Apply each filter value
             for value in filter_values:
                 filter_locator = page.get_by_label(f"{value}{suffix}", exact=True)
                 logger.info(f"Applying filter '{filter_name}' with value: {value}")
-                if filter_locator.is_visible():
+                if await filter_locator.is_visible():
                     await filter_locator.check()
                     await expect(filter_locator).to_be_visible()
             await page.wait_for_load_state('networkidle')
@@ -122,8 +123,14 @@ async def search_ebay(page, query, args):
     await page.wait_for_load_state('networkidle')
     await choose_category(page, args.category) # Set category to PC Laptops
     await page.wait_for_load_state('networkidle')
-    if args:
-        pass
+
+    # --- Search within the category, then filter the results ---
+    logger.info(f"Searching for {query}...")
+    if query:
+        search_input = page.locator(CSS_SELECTOR_SEARCH_INPUT)
+        await search_input.fill(query)
+        await search_input.press("Enter")
+        await page.wait_for_load_state('networkidle')
     # --- Choose filters ---
     await page.get_by_label("All Filters").click()  # Updated selector
     await page.wait_for_load_state('networkidle')
@@ -135,11 +142,8 @@ async def search_ebay(page, query, args):
     await apply_filter(page, 'Condition', args.condition)
 
     # --- Apply the filter dialog ---
-    apply_button = await page.get_by_label("Apply")  # Use more robust selector
-    await apply_button.click()
+    await page.get_by_label("Apply").click()
     await page.wait_for_load_state('networkidle')
-
-    logger.info(f"Searching for {query}...")
 
 
 async def navigate_to_next_page(page):

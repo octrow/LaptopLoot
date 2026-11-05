@@ -9,9 +9,8 @@ nlp = NaturalLanguageProcessor()
 
 # Regex patterns
 price_patterns = [
-    r'(\$\d+(?:\.\d{2})?)',  # Pattern 1: Matches prices like $337.99
-    r'(\$\d+(?:\.\d{2})?)\s+to\s+(\$\d+(?:\.\d{2})?)',  # Pattern 2: Matches price ranges like $131.59 to $345.59
-    r'(\d+\s+000\s+тенге)',  # Pattern 3: Matches prices like 125 000 тенге
+    r'(\$\d[\d,]*(?:\.\d{2})?)',  # Pattern 1: $337.99, $1,299.99; a range "$131.59 to $345.59" gives both ends
+    r'(\d+\s+000\s+тенге)',  # Pattern 2: Matches prices like 125 000 тенге
 ]
 
 # Regex patterns
