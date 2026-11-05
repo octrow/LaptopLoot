@@ -37,3 +37,4 @@ Source for logic findings: [docs/plans/2026-11-05-logic-map-fixes.md](docs/plans
 - [docs/plans/2026-11-05-logic-map-fixes.md](docs/plans/2026-11-05-logic-map-fixes.md): logic-map findings
 - [docs/logic-map.md](docs/logic-map.md): how a search becomes Sheet rows
 - [docs/system-design.md](docs/system-design.md): system design review (2026-11-05), summary across repos in `~/dev/docs/system-design-report-2026-11-05.md`
+- [docs/skills-roadmap-2026-11-05.md](docs/skills-roadmap-2026-11-05.md): навыки с рынка вакансий, 2 пункта: CI ruff+pytest; тесты селекторов на сохранённых HTML eBay
