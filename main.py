@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import asyncio
+import sys
 import traceback
 
 from modules.google_sheets import save_to_google_sheet, load_settings
@@ -42,7 +43,7 @@ async def main(args):
             laptops_data = await scrape_ebay_listings(page, search_query, args)
             # await context.clear_cookies() # Clear cookies after
             df = pd.DataFrame(laptops_data)
-            logger.info("Dataframe:\n", df)
+            logger.info(f"Dataframe:\n{df}")
 
             # --- Google Sheets Integration (with new table handling) ---
             if args.new_table:
@@ -53,9 +54,11 @@ async def main(args):
     except Exception as e:
         logger.error(f"Error: {e}")
         logger.error(traceback.format_exc())
+        return 1
     finally:
         if 'browser' in locals():
             await browser.close()
+    return 0
 
 async def setup_browser(p, without_browser=False):
     logger.info("Launching browser...")
@@ -101,5 +104,5 @@ if __name__ == "__main__":
                                  'Price: lowest first', 'Price: highest first', 'Ending soonest', 'Newly listed'],
                         help='Sorting order for price (default: Price + Shipping: lowest first)')
     args = parser.parse_args()
-    asyncio.run(main(args))
+    sys.exit(asyncio.run(main(args)))
 

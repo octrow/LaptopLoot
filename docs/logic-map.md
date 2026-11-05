@@ -87,7 +87,7 @@ Decides: query, sheet target, filter lists.
 In: argv, env, `settings.json`. Out: `args`, `search_query`.
 Branches:
 - `SEARCH_QUERY` unset → `input()` (runs before the `try`; EOF on a non-interactive stdin ends the run with a traceback).
-Fails: any exception in steps 2-11 is caught in `main`, logged with traceback, process exits 0.
+Fails: any exception in steps 2-11 is caught in `main`, logged with traceback, process exits 1.
 Notes: `browser.close()` runs twice (inside the `async with` and in `finally`, after Playwright stopped); the second call does not raise.
 Module: `main`
 
@@ -198,13 +198,13 @@ Branches:
 - worksheet missing → created with 100 rows, 20 cols;
 - `resize_worksheet` compares `len(data)` and `len(data[0])` with the filled rows (`get_all_values`) and filled cells of row 1, not the grid size, and adds the difference; its errors are logged and skipped;
 - lists are joined with ", ", then `append_rows(RAW)`.
-Notes: no header row is written; rows are appended on every run, with no dedup. Empty `data` → IndexError on `data[0]`, caught and logged.
-Fails: any exception is logged, the run still exits 0.
+Notes: no header row is written; rows are appended on every run, with no dedup. Empty `data` → warning and return, Sheets is not contacted.
+Fails: any exception is logged and re-raised; `main` turns it into exit 1.
 Module: `modules/google_sheets`
 
 ### Output
 
-Google Sheet rows. Also a pandas DataFrame logged with `logger.info("Dataframe:\n", df)`; the message has no placeholder, so the frame is not printed.
+Google Sheet rows. Also a pandas DataFrame logged with `logger.info(f"Dataframe:\n{df}")`.
 Module: `main`
 
 ## Side flows
@@ -229,4 +229,4 @@ Details in the plan.
 - NLP fallback raises and aborts the run (#5).
 - Pagination stops on a 2 s networkidle timeout (#6).
 - Sheet gets no header, duplicates on every run, new sheet is world-writable (#7).
-- Any failure exits 0 with only a log line (#8).
+- ✅ #8 fixed: failure exits 1 (still no retry).

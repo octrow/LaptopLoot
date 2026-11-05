@@ -62,6 +62,9 @@ async def save_to_google_sheet(spreadsheet_id: str | None, sheet_name: str, data
     Returns:
         str or None: The Spreadsheet ID if a new spreadsheet was created, otherwise None.
     """
+    if not data:
+        logger.warning("No data scraped, nothing to save.")
+        return None
     agcm = gspread_asyncio.AsyncioGspreadClientManager(get_creds)
     try:
         agc = await agcm.authorize()
@@ -110,6 +113,7 @@ async def save_to_google_sheet(spreadsheet_id: str | None, sheet_name: str, data
     except Exception as e:
         logger.error(f"Error saving data to Google Sheet: {e}")
         logger.error(traceback.format_exc())
+        raise
 
 async def resize_worksheet(worksheet, rows_needed, cols_needed):
     """Resizes the worksheet if there are not enough rows or columns."""
